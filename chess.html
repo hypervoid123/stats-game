@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stats Game Simulation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        h1 {
+            margin-bottom: 10px;
+        }
+        #canvas {
+            border: 2px solid #333;
+            background-color: white;
+            margin: 20px 0;
+        }
+        .controls {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .stats {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            min-width: 300px;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            font-size: 18px;
+        }
+        .stat-label {
+            font-weight: bold;
+        }
+        .probability {
+            font-size: 24px;
+            color: #2196F3;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Stats Game Simulation</h1>
+    <p>Toss a unit square onto a checkerboard and see if it covers any corners!</p>
+    
+    <canvas id="canvas" width="600" height="600"></canvas>
+    
+    <div class="controls">
+        <button onclick="tossSquare()">Toss Square</button>
+        <button onclick="reset()">Reset</button>
+    </div>
+    
+    <div class="stats">
+        <div class="stat-row">
+            <span class="stat-label">Total Tosses:</span>
+            <span id="total">0</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">No Corners Covered:</span>
+            <span id="success">0</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">Corners Covered:</span>
+            <span id="failure">0</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">Probability (No Corners):</span>
+            <span class="probability" id="prob">0.0000</span>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const CELL_SIZE = 60; // Size of each checkerboard square in pixels
+        const BOARD_SIZE = 10; // 10x10 checkerboard
+        
+        let totalTosses = 0;
+        let successfulTosses = 0;
+        
+        function drawCheckerboard() {
+            for (let i = 0; i < BOARD_SIZE; i++) {
+                for (let j = 0; j < BOARD_SIZE; j++) {
+                    ctx.fillStyle = (i + j) % 2 === 0 ? '#fff' : '#ddd';
+                    ctx.fillRect(i * CELL_SIZE, j * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                }
+            }
+            
+            // Draw grid lines
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= BOARD_SIZE; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * CELL_SIZE, 0);
+                ctx.lineTo(i * CELL_SIZE, canvas.height);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(0, i * CELL_SIZE);
+                ctx.lineTo(canvas.width, i * CELL_SIZE);
+                ctx.stroke();
+            }
+            
+            // Draw corner dots
+            ctx.fillStyle = '#666';
+            for (let i = 0; i <= BOARD_SIZE; i++) {
+                for (let j = 0; j <= BOARD_SIZE; j++) {
+                    ctx.beginPath();
+                    ctx.arc(i * CELL_SIZE, j * CELL_SIZE, 3, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+            }
+        }
+        
+        function checkCornerCoverage(squareCorners, corners) {
+            // Check if any checkerboard corner is inside the tossed square
+            for (let corner of corners) {
+                if (isPointInPolygon(corner, squareCorners)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        function isPointInPolygon(point, polygon) {
+            let inside = false;
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                const xi = polygon[i].x, yi = polygon[i].y;
+                const xj = polygon[j].x, yj = polygon[j].y;
+                
+                const intersect = ((yi > point.y) !== (yj > point.y))
+                    && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+        
+        function tossSquare() {
+            drawCheckerboard();
+            
+            // Random position (center of square)
+            const cx = Math.random() * canvas.width;
+            const cy = Math.random() * canvas.height;
+            
+            // Random orientation (angle in radians)
+            const angle = Math.random() * 2 * Math.PI;
+            
+            // Unit square size (same as checkerboard cell)
+            const halfSize = CELL_SIZE / 2;
+            
+            // Calculate the four corners of the rotated square
+            const corners = [
+                {x: -halfSize, y: -halfSize},
+                {x: halfSize, y: -halfSize},
+                {x: halfSize, y: halfSize},
+                {x: -halfSize, y: halfSize}
+            ];
+            
+            const rotatedCorners = corners.map(corner => ({
+                x: cx + corner.x * Math.cos(angle) - corner.y * Math.sin(angle),
+                y: cy + corner.x * Math.sin(angle) + corner.y * Math.cos(angle)
+            }));
+            
+            // Get all checkerboard corners that could be covered
+            const checkerboardCorners = [];
+            for (let i = 0; i <= BOARD_SIZE; i++) {
+                for (let j = 0; j <= BOARD_SIZE; j++) {
+                    checkerboardCorners.push({x: i * CELL_SIZE, y: j * CELL_SIZE});
+                }
+            }
+            
+            // Check if any corner is covered
+            const coversCorner = checkCornerCoverage(rotatedCorners, checkerboardCorners);
+            
+            // Draw the tossed square
+            ctx.fillStyle = coversCorner ? 'rgba(255, 0, 0, 0.4)' : 'rgba(0, 255, 0, 0.4)';
+            ctx.strokeStyle = coversCorner ? 'red' : 'green';
+            ctx.lineWidth = 2;
+            
+            ctx.beginPath();
+            ctx.moveTo(rotatedCorners[0].x, rotatedCorners[0].y);
+            for (let i = 1; i < rotatedCorners.length; i++) {
+                ctx.lineTo(rotatedCorners[i].x, rotatedCorners[i].y);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            
+            // Update statistics
+            totalTosses++;
+            if (!coversCorner) {
+                successfulTosses++;
+            }
+            
+            updateStats();
+        }
+        
+        function updateStats() {
+            document.getElementById('total').textContent = totalTosses;
+            document.getElementById('success').textContent = successfulTosses;
+            document.getElementById('failure').textContent = totalTosses - successfulTosses;
+            
+            const probability = totalTosses > 0 ? successfulTosses / totalTosses : 0;
+            document.getElementById('prob').textContent = probability.toFixed(4);
+        }
+        
+        function reset() {
+            totalTosses = 0;
+            successfulTosses = 0;
+            drawCheckerboard();
+            updateStats();
+        }
+        
+        // Initial draw
+        drawCheckerboard();
+    </script>
+</body>
+</html>
